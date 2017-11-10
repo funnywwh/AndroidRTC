@@ -1,12 +1,15 @@
 package fr.pchab.androidrtc;
 
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.graphics.Point;
 import android.opengl.GLSurfaceView;
 import android.os.Bundle;
 import android.view.Window;
 import android.view.WindowManager.LayoutParams;
+import android.widget.EditText;
 import android.widget.Toast;
 import org.json.JSONException;
 import org.webrtc.MediaStream;
@@ -15,7 +18,9 @@ import org.webrtc.VideoRendererGui;
 import fr.pchab.webrtcclient.WebRtcClient;
 import fr.pchab.webrtcclient.PeerConnectionParameters;
 
+import java.io.UnsupportedEncodingException;
 import java.util.List;
+import android.os.Handler;
 
 public class RtcActivity extends Activity implements WebRtcClient.RtcListener {
     private final static int VIDEO_CALL_SENT = 666;
@@ -43,6 +48,7 @@ public class RtcActivity extends Activity implements WebRtcClient.RtcListener {
     private WebRtcClient client;
     private String mSocketAddress;
     private String callerId;
+    private String mMyName = "AndroidTest";
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -55,7 +61,7 @@ public class RtcActivity extends Activity implements WebRtcClient.RtcListener {
                         | LayoutParams.FLAG_SHOW_WHEN_LOCKED
                         | LayoutParams.FLAG_TURN_SCREEN_ON);
         setContentView(R.layout.main);
-        mSocketAddress = "http://" + getResources().getString(R.string.host);
+        mSocketAddress = "https://" + getResources().getString(R.string.host);
         mSocketAddress += (":" + getResources().getString(R.string.port) + "/");
 
         vsv = (GLSurfaceView) findViewById(R.id.glview_call);
@@ -133,16 +139,41 @@ public class RtcActivity extends Activity implements WebRtcClient.RtcListener {
         }
     }
 
+
     public void answer(String callerId) throws JSONException {
         client.sendMessage(callerId, "init", null);
         startCam();
     }
-
+    Handler mUiHandler = new Handler();;
     public void call(String callId) {
-        Intent msg = new Intent(Intent.ACTION_SEND);
-        msg.putExtra(Intent.EXTRA_TEXT, mSocketAddress + callId);
-        msg.setType("text/plain");
-        startActivityForResult(Intent.createChooser(msg, "Call someone :"), VIDEO_CALL_SENT);
+//        Intent msg = new Intent(Intent.ACTION_SEND);
+//        msg.putExtra(Intent.EXTRA_TEXT, mSocketAddress + callId);
+//        msg.setType("text/plain");
+//        startActivityForResult(Intent.createChooser(msg, "Call someone :"), VIDEO_CALL_SENT);
+
+        mUiHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                final EditText inputServer = new EditText(RtcActivity.this);
+                inputServer.setText(mMyName);
+                AlertDialog.Builder builder = new AlertDialog.Builder(RtcActivity.this);
+                builder.setTitle("输入昵称").setIcon(android.R.drawable.ic_dialog_info).setView(inputServer)
+                        .setNegativeButton("Cancel", null);
+                builder.setPositiveButton("Ok", new DialogInterface.OnClickListener() {
+
+                    public void onClick(DialogInterface dialog, int which) {
+                        String tmp = inputServer.getText().toString();
+                        if (tmp.length() > 0) {
+                            mMyName = tmp;
+                        }
+                        startCam();
+                    }
+                });
+                builder.show();
+
+            }
+        });
+
     }
 
     @Override
@@ -154,7 +185,11 @@ public class RtcActivity extends Activity implements WebRtcClient.RtcListener {
 
     public void startCam() {
         // Camera settings
-        client.start("android_test");
+        try {
+            client.start(new String(mMyName.getBytes(),"utf-8"));
+        } catch (UnsupportedEncodingException e) {
+            e.printStackTrace();
+        }
     }
 
     @Override

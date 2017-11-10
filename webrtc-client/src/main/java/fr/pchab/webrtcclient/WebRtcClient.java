@@ -1,6 +1,11 @@
 package fr.pchab.webrtcclient;
 
 import java.net.URISyntaxException;
+import java.security.KeyManagementException;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
+import java.security.cert.CertificateException;
+import java.security.cert.X509Certificate;
 import java.util.HashMap;
 import java.util.LinkedList;
 
@@ -13,6 +18,13 @@ import org.json.JSONObject;
 import android.opengl.EGLContext;
 import android.util.Log;
 import org.webrtc.*;
+
+import javax.net.ssl.HostnameVerifier;
+import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLSession;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
 
 public class WebRtcClient {
     private final static String TAG = WebRtcClient.class.getCanonicalName();
@@ -263,7 +275,24 @@ public class WebRtcClient {
         peers.remove(peer.id);
         endPoints[peer.endPoint] = false;
     }
+    public static class RelaxedHostNameVerifier implements HostnameVerifier {
+        public boolean verify(String hostname, SSLSession session) {
+            return true;
+        }
+    }
+    private TrustManager[] trustAllCerts = new TrustManager[] { new X509TrustManager() {
+        public java.security.cert.X509Certificate[] getAcceptedIssuers() {
+            return new java.security.cert.X509Certificate[] {};
+        }
 
+        public void checkClientTrusted(X509Certificate[] chain,
+                                       String authType) throws CertificateException {
+        }
+
+        public void checkServerTrusted(X509Certificate[] chain,
+                                       String authType) throws CertificateException {
+        }
+    } };
     public WebRtcClient(RtcListener listener, String host, PeerConnectionParameters params, EGLContext mEGLcontext) {
         mListener = listener;
         pcParams = params;
@@ -273,8 +302,23 @@ public class WebRtcClient {
         MessageHandler messageHandler = new MessageHandler();
 
         try {
-            client = IO.socket(host);
+            SSLContext sc = SSLContext.getInstance("TLS");
+            sc.init(null, trustAllCerts, new SecureRandom());
+            IO.setDefaultSSLContext(sc);
+            HttpsURLConnection.setDefaultHostnameVerifier(new RelaxedHostNameVerifier());
+
+            IO.Options opts = new IO.Options();
+            opts.forceNew = true;
+            opts.reconnection = false;
+            opts.secure = true;
+            opts.sslContext = sc;
+
+            client = IO.socket(host,opts);
         } catch (URISyntaxException e) {
+            e.printStackTrace();
+        }catch (NoSuchAlgorithmException e){
+            e.printStackTrace();
+        }catch (KeyManagementException e){
             e.printStackTrace();
         }
         client.on("id", messageHandler.onId);
